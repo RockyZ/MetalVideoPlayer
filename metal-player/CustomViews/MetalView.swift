@@ -9,6 +9,7 @@
 import CoreVideo
 import Foundation
 import MetalKit
+import MetalPerformanceShaders
 
 final class MetalView: MTKView {
     
@@ -23,6 +24,14 @@ final class MetalView: MTKView {
     private var textureCache: CVMetalTextureCache?
     private var commandQueue: MTLCommandQueue
     private var computePipelineState: MTLComputePipelineState
+    private var gaussianBlur: MPSImageGaussianBlur?
+
+    private func createGaussianBlur() {
+        if let device = device {
+            gaussianBlur = MPSImageGaussianBlur(device: device, sigma: Float(6.0))
+        }
+    }
+
     
     override init(frame frameRect: CGRect, device: MTLDevice?) {
         // Get the default metal device.
@@ -79,7 +88,9 @@ final class MetalView: MTKView {
         self.contentScaleFactor = UIScreen.main.scale
         
         // Set the size of the drawable - see input video size
-        self.drawableSize = CGSize(width: 608, height: 1080)
+        self.drawableSize = CGSize(width: 405, height: 720)
+        
+        setup()
     }
     
     required init(coder: NSCoder) {
@@ -136,8 +147,16 @@ final class MetalView: MTKView {
         // Set the content scale factor to the screen scale.
         self.contentScaleFactor = UIScreen.main.scale
         
-        // Set the size of the drawable - see input video size
-        self.drawableSize = CGSize(width: 608, height: 1080)
+//        // Set the size of the drawable - see input video size
+//        self.drawableSize = CGSize(width: 1242, height: 690)
+//
+        
+        setup()
+    }
+    
+    func setup()
+    {
+        createGaussianBlur()
     }
     
     override func draw(_ rect: CGRect) {
@@ -155,6 +174,8 @@ final class MetalView: MTKView {
         // Get width and height for the pixel buffer
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
+        
+        
         
         // Converts the pixel buffer in a Metal texture.
         var cvTextureOut: CVMetalTexture?
@@ -192,6 +213,14 @@ final class MetalView: MTKView {
         
         // Register the current drawable for rendering.
         commandBuffer?.present(drawable)
+        
+        if let gaussianBlur = gaussianBlur {
+            // apply the gaussian blur with MPS
+            let inplaceTexture = UnsafeMutablePointer<MTLTexture>.allocate(capacity: 1)
+            inplaceTexture.initialize(to: drawable.texture)
+            gaussianBlur.encode(commandBuffer: commandBuffer!, inPlaceTexture: inplaceTexture)
+        }
+
         
         // Commit the command buffer for execution.
         commandBuffer?.commit()

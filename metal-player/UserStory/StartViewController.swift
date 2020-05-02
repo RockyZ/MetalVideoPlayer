@@ -57,11 +57,11 @@ class StartViewController: UIViewController {
     
     private func setupPlayer() {
         
-        guard let url = Bundle.main.url(forResource: "video", withExtension: "mp4") else {
-            print("Impossible to find the video.")
-            return
-        }
-        
+//        guard let url = Bundle.main.url(forResource: "video", withExtension: "mp4") else {
+//            print("Impossible to find the video.")
+//            return
+//        }
+        let url:URL = URL.init(string: "https://bitdash-a.akamaihd.net/content/MI201109210084_1/m3u8s/f08e80da-bf1d-4e3d-8899-f0f6155f6efa_video_720_2400000.m3u8")!
         let asset = AVURLAsset(url: url)
         let playerItem = AVPlayerItem(asset: asset)
         playerItem.add(playerItemVideoOutput)
