@@ -191,35 +191,66 @@ final class MetalView: MTKView {
         // Create a command buffer
         let commandBuffer = commandQueue.makeCommandBuffer()
         
-        // Create a compute command encoder.
-        let computeCommandEncoder = commandBuffer?.makeComputeCommandEncoder()
         
-        // Set the compute pipeline state for the command encoder.
-        computeCommandEncoder?.setComputePipelineState(computePipelineState)
+
+        let containerSize = self.bounds.size;
         
-        // Set the input and output textures for the compute shader.
-        computeCommandEncoder?.setTexture(inputTexture, index: 0)
-        computeCommandEncoder?.setTexture(drawable.texture, index: 1)
+        let cropWidth = containerSize.width / containerSize.height * CGFloat(height);
+        let cropRect = CGRect.init(x: floor(CGFloat(width) - cropWidth) / 2, y: 0, width: cropWidth, height: CGFloat(height))
+
+        let filter = MPSImageLanczosScale(device: device!)
+        var transform = MPSScaleTransform(scaleX: 1.0, scaleY: 1.0, translateX: Double(0 - cropRect.origin.x), translateY: 0)
+
         
-        // Convert the time in a metal buffer.
-        var time = Float(self.inputTime!)
-        computeCommandEncoder?.setBytes(&time, length: MemoryLayout<Float>.size, index: 0)
+        let mtlTextureDescriptor = MTLTextureDescriptor()
+        mtlTextureDescriptor.pixelFormat = .bgra8Unorm
+        mtlTextureDescriptor.width = Int(cropRect.width)
+        mtlTextureDescriptor.height = Int(cropRect.height)
+        mtlTextureDescriptor.usage = [.shaderWrite, .shaderRead]
+
+        // make dest texture
+        guard let transformedTexture = device!.makeTexture(descriptor: mtlTextureDescriptor) else {
+            fatalError()
+        }
+
+        withUnsafePointer(to: &transform) { (transformPtr: UnsafePointer<MPSScaleTransform>) -> () in
+            filter.scaleTransform = transformPtr
+            filter.encode(commandBuffer: commandBuffer!, sourceTexture: inputTexture, destinationTexture: transformedTexture)
+        }
+//        commandBuffer?.commit()
+//        commandBuffer?.waitUntilCompleted()
         
-        // Encode a threadgroup's execution of a compute function
-        computeCommandEncoder?.dispatchThreadgroups(inputTexture.threadGroups(), threadsPerThreadgroup: inputTexture.threadGroupCount())
-        
-        // End the encoding of the command.
-        computeCommandEncoder?.endEncoding()
+        do {
+            // Create a compute command encoder.
+            let computeCommandEncoder = commandBuffer?.makeComputeCommandEncoder()
+            
+            // Set the compute pipeline state for the command encoder.
+            computeCommandEncoder?.setComputePipelineState(computePipelineState)
+            
+            // Set the input and output textures for the compute shader.
+            computeCommandEncoder?.setTexture(transformedTexture, index: 0)
+            computeCommandEncoder?.setTexture(drawable.texture, index: 1)
+            
+            // Convert the time in a metal buffer.
+            var time = Float(self.inputTime!)
+            computeCommandEncoder?.setBytes(&time, length: MemoryLayout<Float>.size, index: 0)
+            
+            // Encode a threadgroup's execution of a compute function
+            computeCommandEncoder?.dispatchThreadgroups(transformedTexture.threadGroups(), threadsPerThreadgroup: transformedTexture.threadGroupCount())
+            
+            // End the encoding of the command.
+            computeCommandEncoder?.endEncoding()
+        }
         
         // Register the current drawable for rendering.
         commandBuffer?.present(drawable)
         
-        if let gaussianBlur = gaussianBlur {
-            // apply the gaussian blur with MPS
-            let inplaceTexture = UnsafeMutablePointer<MTLTexture>.allocate(capacity: 1)
-            inplaceTexture.initialize(to: drawable.texture)
-            gaussianBlur.encode(commandBuffer: commandBuffer!, inPlaceTexture: inplaceTexture)
-        }
+//        if let gaussianBlur = gaussianBlur {
+//            // apply the gaussian blur with MPS
+//            let inplaceTexture = UnsafeMutablePointer<MTLTexture>.allocate(capacity: 1)
+//            inplaceTexture.initialize(to: drawable.texture)
+//            gaussianBlur.encode(commandBuffer: commandBuffer!, inPlaceTexture: inplaceTexture)
+//        }
 
         
         // Commit the command buffer for execution.
