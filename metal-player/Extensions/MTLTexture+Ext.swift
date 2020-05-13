@@ -16,7 +16,7 @@ extension MTLTexture {
  
     func threadGroups() -> MTLSize {
         let groupCount = threadGroupCount()
-        return MTLSizeMake(Int(self.width) / groupCount.width, Int(self.height) / groupCount.height, 1)
+        return MTLSizeMake(Int(self.width) / groupCount.width + 1, Int(self.height) / groupCount.height + 1, 1)
     }
 }
  

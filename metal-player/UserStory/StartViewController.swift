@@ -21,6 +21,7 @@ class StartViewController: UIViewController {
     lazy var displayLink: CADisplayLink = {
         let dl = CADisplayLink(target: self, selector: #selector(readBuffer(_:)))
         dl.add(to: .current, forMode: RunLoop.Mode.default)
+        dl.preferredFramesPerSecond = 25;
         dl.isPaused = true
         return dl
     }()
@@ -78,6 +79,7 @@ class StartViewController: UIViewController {
         if playerItemVideoOutput.hasNewPixelBuffer(forItemTime: currentTime), let pixelBuffer = playerItemVideoOutput.copyPixelBuffer(forItemTime: currentTime, itemTimeForDisplay: nil) {
             self.metalView.pixelBuffer = pixelBuffer
             self.metalView.inputTime = currentTime.seconds
+            self.metalView.render(self.metalView)
         }
     }
     

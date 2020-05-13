@@ -159,15 +159,15 @@ final class MetalView: MTKView {
         createGaussianBlur()
     }
     
-    override func draw(_ rect: CGRect) {
-        autoreleasepool {
-            if rect.width > 0 && rect.height > 0 {
-                self.render(self)
-            }
-        }
-    }
+//    override func draw(_ rect: CGRect) {
+//        autoreleasepool {
+//            if rect.width > 0 && rect.height > 0 {
+//                self.render(self)
+//            }
+//        }
+//    }
     
-    private func render(_ view: MTKView) {
+    public func render(_ view: MTKView) {
         // Check if the pixel buffer exists
         guard let pixelBuffer = self.pixelBuffer else { return }
         
@@ -194,14 +194,14 @@ final class MetalView: MTKView {
         
 
         let containerSize = self.bounds.size;
-        
+
         let cropWidth = containerSize.width / containerSize.height * CGFloat(height);
-        let cropRect = CGRect.init(x: floor(CGFloat(width) - cropWidth) / 2, y: 0, width: cropWidth, height: CGFloat(height))
+        let cropRect = CGRect.init(x: floor((CGFloat(width) - cropWidth) / 2), y: 0, width: cropWidth, height: CGFloat(height))
 
         let filter = MPSImageLanczosScale(device: device!)
         var transform = MPSScaleTransform(scaleX: 1.0, scaleY: 1.0, translateX: Double(0 - cropRect.origin.x), translateY: 0)
 
-        
+
         let mtlTextureDescriptor = MTLTextureDescriptor()
         mtlTextureDescriptor.pixelFormat = .bgra8Unorm
         mtlTextureDescriptor.width = Int(cropRect.width)
@@ -228,7 +228,7 @@ final class MetalView: MTKView {
             computeCommandEncoder?.setComputePipelineState(computePipelineState)
             
             // Set the input and output textures for the compute shader.
-            computeCommandEncoder?.setTexture(transformedTexture, index: 0)
+            computeCommandEncoder?.setTexture(inputTexture, index: 0)
             computeCommandEncoder?.setTexture(drawable.texture, index: 1)
             
             // Convert the time in a metal buffer.
@@ -236,7 +236,7 @@ final class MetalView: MTKView {
             computeCommandEncoder?.setBytes(&time, length: MemoryLayout<Float>.size, index: 0)
             
             // Encode a threadgroup's execution of a compute function
-            computeCommandEncoder?.dispatchThreadgroups(transformedTexture.threadGroups(), threadsPerThreadgroup: transformedTexture.threadGroupCount())
+            computeCommandEncoder?.dispatchThreadgroups(inputTexture.threadGroups(), threadsPerThreadgroup: inputTexture.threadGroupCount())
             
             // End the encoding of the command.
             computeCommandEncoder?.endEncoding()
@@ -245,17 +245,17 @@ final class MetalView: MTKView {
         // Register the current drawable for rendering.
         commandBuffer?.present(drawable)
         
-//        if let gaussianBlur = gaussianBlur {
-//            // apply the gaussian blur with MPS
-//            let inplaceTexture = UnsafeMutablePointer<MTLTexture>.allocate(capacity: 1)
-//            inplaceTexture.initialize(to: drawable.texture)
-//            gaussianBlur.encode(commandBuffer: commandBuffer!, inPlaceTexture: inplaceTexture)
-//        }
+        if let gaussianBlur = gaussianBlur {
+            // apply the gaussian blur with MPS
+            let inplaceTexture = UnsafeMutablePointer<MTLTexture>.allocate(capacity: 1)
+            inplaceTexture.initialize(to: drawable.texture)
+            gaussianBlur.encode(commandBuffer: commandBuffer!, inPlaceTexture: inplaceTexture)
+        }
 
         
         // Commit the command buffer for execution.
         commandBuffer?.commit()
-        
+        commandBuffer?.waitUntilCompleted()
     }
     
 }
